@@ -44,7 +44,7 @@ const AppContextProvider = ({ children }) => {
     }
   };
 
-  // ---------- IMAGE GENERATION ----------
+  // ---------- IMAGE GENERATION (returns array of 5 images) ----------
   const generateImage = async (prompt) => {
     try {
       const { data } = await axios.post(
@@ -54,11 +54,9 @@ const AppContextProvider = ({ children }) => {
       );
 
       if (data.success) {
-        // credits kam karo + image return karo
         loadCreditsData();
-        return data.resultImage;
+        return data.resultImages;
       } else {
-        // agar backend 200 + success:false bhej raha ho
         toast.error(data.message || "Something went wrong");
         loadCreditsData();
         if (data.creditBalance === 0) {
@@ -75,11 +73,9 @@ const AppContextProvider = ({ children }) => {
       const msg = error.response?.data?.message || error.message;
       toast.error(msg);
 
-      // agar backend error ke saath creditBalance bhej raha ho
       const creditBalance =
         error.response?.data?.creditBalance ?? undefined;
 
-      // credits refresh
       loadCreditsData();
 
       if (creditBalance === 0) {

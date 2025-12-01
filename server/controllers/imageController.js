@@ -2,15 +2,13 @@ import userModel from "../models/userModels.js";
 import FormData from "form-data";
 import axios from "axios";
 
+const IMAGE_COUNT = 5;
+
 export const generateImage = async (req, res) => {
   try {
-    // 🔹 Body se sirf prompt lo
     const { prompt } = req.body;
-
-    // 🔹 UserId token se lo (auth middleware se)
     const userId = req.userId || req.body.userId;
 
-    // ---------- VALIDATION ----------
     if (!userId || !prompt) {
       return res.status(400).json({
         success: false,
@@ -27,45 +25,47 @@ export const generateImage = async (req, res) => {
       });
     }
 
-    if (!user.creditBalance || user.creditBalance <= 0) {
+    if (!user.creditBalance || user.creditBalance < IMAGE_COUNT) {
       return res.status(400).json({
         success: false,
-        message: "No Credit Balance",
+        message: `You need at least ${IMAGE_COUNT} credits to generate images. You have ${user.creditBalance || 0} credits.`,
         creditBalance: user.creditBalance || 0,
       });
     }
 
-    // ---------- CLIPDROP REQUEST ----------
-    const formData = new FormData();
-    formData.append("prompt", prompt);
+    const generateSingleImage = async () => {
+      const formData = new FormData();
+      formData.append("prompt", prompt);
 
-    const clipdropRes = await axios.post(
-      "https://clipdrop-api.co/text-to-image/v1",
-      formData,
-      {
-        headers: {
-          ...formData.getHeaders(), // multipart boundary ke liye
-          "x-api-key": process.env.CLIPDROP_API,
-        },
-        responseType: "arraybuffer",
-      }
-    );
+      const clipdropRes = await axios.post(
+        "https://clipdrop-api.co/text-to-image/v1",
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            "x-api-key": process.env.CLIPDROP_API,
+          },
+          responseType: "arraybuffer",
+        }
+      );
 
-    // ---------- IMAGE ko base64 me convert ----------
-    const base64Image = Buffer.from(clipdropRes.data, "binary").toString(
-      "base64"
-    );
-    const resultImage = `data:image/png;base64,${base64Image}`;
+      const base64Image = Buffer.from(clipdropRes.data, "binary").toString(
+        "base64"
+      );
+      return `data:image/png;base64,${base64Image}`;
+    };
 
-    // ---------- CREDIT UPDATE ----------
-    user.creditBalance = (user.creditBalance || 0) - 1;
+    const imagePromises = Array(IMAGE_COUNT).fill(null).map(() => generateSingleImage());
+    const resultImages = await Promise.all(imagePromises);
+
+    user.creditBalance = (user.creditBalance || 0) - IMAGE_COUNT;
     await user.save();
 
     return res.json({
       success: true,
-      message: "Image Generated",
+      message: `${IMAGE_COUNT} Images Generated`,
       creditBalance: user.creditBalance,
-      resultImage,
+      resultImages,
     });
   } catch (error) {
     console.error(
